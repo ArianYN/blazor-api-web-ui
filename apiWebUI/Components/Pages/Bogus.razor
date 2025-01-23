@@ -1,0 +1,148 @@
+﻿@page "/Bogus"
+@using Newtonsoft.Json
+@using apiWebUI.APIHandlers
+@using apiWebUI.Classes
+
+<PageTitle>Bogus API</PageTitle>
+
+<div class="container">
+    <h1>Bogus</h1>
+    
+    <br/>
+    <p><strong>People In DB: </strong>@peopleDBCount</p>
+    <p><strong>Cars In DB: </strong>@carDBCount</p>
+    <br/>
+    
+    <p>Hokus Pokus, what to bogus?</p>
+    <select name="bogus" id="bogusOperation" @bind="bogusOperation" class="input-field">
+        <option value="nothing">Select datatype</option>
+        <option value="cars">Cars</option>
+        <option value="people">People</option>
+    </select>
+
+    <p>Amount to create</p>
+    <input type="number" @bind="amountToGenerate" class="input-field" placeholder="Enter amount" />
+
+    <br />
+    <button @onclick="BogusNow" class="btn-primary">@buttonText</button>
+    <p class="response-message">@responseMessage</p>
+</div>
+
+@code {
+    private string responseMessage;
+    private string bogusOperation;
+    private int amountToGenerate;
+
+    private string buttonText = "BOGUS";
+    private string peopleDBCount = "Loading...";
+    private string carDBCount = "Loading...";
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await CountDatabase();
+    }
+
+    private async Task BogusNow()
+    {
+        if (bogusOperation == null || bogusOperation == "nothing" || amountToGenerate == null)
+        {
+            responseMessage = "*All fields must be filled*";
+            return; 
+        }
+
+        buttonText = "Generating...";
+        
+        BogusAPIService bogusApi = new BogusAPIService();
+        string apiResponse = await bogusApi.CreateData(bogusOperation, amountToGenerate);
+        
+        BogusResponse bogusResponse = JsonConvert.DeserializeObject<BogusResponse>(apiResponse);
+        responseMessage = bogusResponse.message;
+        
+        await CountDatabase();
+        buttonText = "BOGUS";
+        
+        StateHasChanged();
+    }
+
+    private async Task CountDatabase()
+    {
+        PeopleAPIService peopleApiService = new PeopleAPIService();
+        peopleDBCount = await peopleApiService.CountPeopleAsync();
+
+        CarAPIService carApiService = new CarAPIService();
+        carDBCount = await carApiService.CountCarsAsync();
+    }
+}
+
+<style>
+    body {
+        font-family: 'Arial', sans-serif;
+        margin: 0;
+        background-color: #f4f4f4;
+        color: #333;
+    }
+
+    h1 {
+        font-size: 2.5em;
+        color: #2c3e50;
+        margin-bottom: 10px;
+        text-align: center;
+    }
+
+    p {
+        font-size: 1em;
+        margin: 5px 0;
+        text-align: center;
+    }
+
+    .input-field {
+        width: 100%;
+        max-width: 300px;
+        padding: 10px;
+        margin: 10px auto;
+        font-size: 1em;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        display: block;
+    }
+
+    button {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        font-size: 1em;
+        cursor: pointer;
+        border-radius: 5px;
+        margin: 5px 0;
+        transition: background-color 0.3s;
+    }
+
+    button:hover {
+        background-color: #2980b9;
+    }
+
+    .btn-primary {
+        background-color: #3498db;
+    }
+
+    .btn-primary:hover {
+        background-color: #2980b9;
+    }
+
+    .response-message {
+        font-size: 1em;
+        color: green;
+        text-align: center;
+    }
+
+    .container {
+        max-width: 600px;
+        margin: 20px auto;
+        background-color: #fff;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        text-align: center;
+    }
+</style>

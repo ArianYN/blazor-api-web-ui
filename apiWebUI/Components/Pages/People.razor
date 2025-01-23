@@ -1,0 +1,399 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using Newtonsoft.Json
+@using apiWebUI.APIHandlers
+@using apiWebUI.Classes
+<PageTitle>People Database API</PageTitle>
+
+<div class="container">
+    <h1>PersonDB</h1>
+    <p>Traverse this vast Database of people by using the tool below!</p>
+
+    <input type="text" @bind="FirstNameInput" placeholder="Enter first name">
+    <input type="text" @bind="LastNameInput" placeholder="Enter last name">
+    <br/>
+    <button @onclick="SearchPeopleDB">Search</button>
+    <button @onclick="OpenAddModal">Add new Person</button>
+</div>
+
+@if (searchClicked)
+{
+    if (!SearchedPeopleList.Any() && currentlySearching)
+    {
+        <div class="loader-container">
+            <span style="align-items: center" class="loader"></span>
+        </div>
+    }
+    else if (!SearchedPeopleList.Any() && !currentlySearching)
+    {
+        <p style="text-align: center;"> No users found...</p>
+    } 
+    else 
+    {
+        <div class="card-container">
+            @foreach (Person currentPerson in SearchedPeopleList)
+            {
+                <div class="card-container">
+                    <div class="card">
+                        <img src="emptyUser.png" alt="User Image" class="card-image" />
+                        <div class="card-content">
+                            <h2 class="card-name">@currentPerson.FirstName @currentPerson.LastName</h2>
+                            <p class="card-detail"><strong>Id:</strong> @currentPerson.Id</p>
+                            
+                            <p class="card-detail"><strong>Email:</strong></p>
+                            <p class="card-detail">@currentPerson.Email</p>
+                            
+                            <p class="card-detail"><strong>Address: </strong></p>
+                            <p class="card-detail"> @currentPerson.Address</p>
+                        </div>
+                        <button style="width: 50%; margin: 0 auto; display: block; margin-bottom: 10px" @onclick="@(() => InitEditUserModal(currentPerson))">Edit</button>
+                    </div>
+                </div>
+            }
+            @if (SearchedPeopleList.Count % 30 == 0)
+            {
+                <button @onclick="ViewMore">View More</button>
+            }
+        </div>
+    }
+}
+
+@if (addModalOpen)
+{
+    <div class="modal" tabindex="-1" style="display:block;">
+        <div class="modal-dialog">
+            <div class="modal-content" style="background-color: #282829;">
+                <div class="modal-header">
+                    <h5 class="addModalTitle">Add new Person</h5>
+                    <button type="button" class="btn-close" @onclick="CloseAddModal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <input type="text" placeholder="First Name" @bind="personToAdd.FirstName"/>
+                    <input type="text" placeholder="Last Name" @bind="personToAdd.LastName"/>
+                    <input type="text" placeholder="Email" @bind="personToAdd.Email"/>
+                    <input type="text" placeholder="Address" @bind="personToAdd.Address"/>
+                </div>
+
+                <div class="modal-footer">
+                    <p style="color: white">@AddResponseMessage</p>
+                    <button type="button" class="btn btn-secondary" style="background-color: green" @onclick="AddNewUser">Add</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (editModalOpen)
+{
+    <div class="modal" tabindex="-1" style="display:block;">
+        <div class="modal-dialog">
+            <div class="modal-content" style="background-color: #282829;">
+                <div class="modal-header">
+                    <h5 class="addModalTitle">Edit @personToEdit.FirstName @personToEdit.LastName</h5>
+                    <button type="button" class="btn-close" @onclick="CloseEditModal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <input type="text" placeholder="First Name" @bind="@personToEdit.FirstName"/>
+                    <input type="text" placeholder="Last Name" @bind="@personToEdit.LastName"/>
+                    <input type="text" placeholder="Email" @bind="@personToEdit.Email"/>
+                    <input type="text" placeholder="Address" @bind="@personToEdit.Address"/>
+                </div>
+
+                <div class="modal-footer">
+                    <p style="color: white">@EditResponseMessage</p>
+                    <button type="button" class="btn btn-secondary" style="background-color: green" @onclick="EditUser">Edit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string FirstNameInput;
+    private string LastNameInput;
+    private int PageAmount = 1;
+
+    private bool searchClicked = false;
+    private bool currentlySearching = false;
+    
+    List<Person> SearchedPeopleList = new List<Person>();
+
+    private bool addModalOpen = false;
+    private bool editModalOpen = false;
+    
+    Person personToAdd = new Person();
+    private string AddResponseMessage = "";
+    
+    Person personToEdit = new Person();
+    private string EditResponseMessage = "";
+
+    private async Task SearchPeopleDB()
+    {
+        searchClicked = false;
+        SearchedPeopleList.Clear();
+        PageAmount = 1;
+        
+        PeopleAPIService peopleApi = new PeopleAPIService();
+        
+        searchClicked = true;
+        
+        currentlySearching = true;
+        SearchedPeopleList = await peopleApi.GetPeopleAsync(FirstNameInput, LastNameInput, PageAmount);
+        currentlySearching = false;
+    }
+
+    private async Task ViewMore()
+    {
+        PageAmount++;
+        PeopleAPIService peopleApi = new PeopleAPIService();
+
+        currentlySearching = true;
+        List<Person> morePeople = await peopleApi.GetPeopleAsync(FirstNameInput, LastNameInput, PageAmount);
+
+        foreach (Person person in morePeople)
+        {
+            SearchedPeopleList.Add(person);
+        }
+    }
+
+    public async Task AddNewUser()
+    {
+        AddResponseMessage = "";
+        if (String.IsNullOrEmpty(personToAdd.FirstName) ||
+            String.IsNullOrEmpty(personToAdd.LastName) ||
+            String.IsNullOrEmpty(personToAdd.Email) ||
+            String.IsNullOrEmpty(personToAdd.Address))
+        {
+            AddResponseMessage = "*All fields required*";
+            return;
+        }
+        
+        PeopleAPIService peopleApi = new PeopleAPIService();
+        string response = await peopleApi.AddPersonAsync(personToAdd);
+        Person userAdded = JsonConvert.DeserializeObject<Person>(response);
+
+        if (userAdded == null)
+        {
+            AddResponseMessage = "! Failed to create new Person...";
+            return;
+        }
+        else
+        {
+            AddResponseMessage = $"Created new person: {userAdded.FirstName} {userAdded.LastName}";
+            personToAdd = new Person();
+        }
+    }
+
+    private async Task InitEditUserModal(Person currentPerson)
+    {
+        personToEdit = currentPerson;
+        OpenEditModal();
+    }
+
+    private async Task EditUser()
+    {
+        Person personToUpdate = personToEdit;
+        
+        PeopleAPIService peopleApiService = new PeopleAPIService();
+        string apiResponse = await peopleApiService.EditPersonAsync(personToUpdate);
+        Person updatedPerson = JsonConvert.DeserializeObject<Person>(apiResponse);
+
+        if (updatedPerson == null)
+        {
+            EditResponseMessage = "Failed to edit person...";
+            return;
+        }
+        else
+        {
+            EditResponseMessage = $"Edited {updatedPerson.FirstName} {updatedPerson.LastName} Successfully";
+            personToEdit = new Person();
+            await SearchPeopleDB();
+        }
+    }
+    
+    private void OpenAddModal()
+    {
+        addModalOpen = true;
+    }
+
+    private void CloseAddModal()
+    {
+        addModalOpen = false;
+    }
+
+    private void OpenEditModal()
+    {
+        editModalOpen = true;
+    }
+
+    private void CloseEditModal()
+    {
+        editModalOpen = false;
+        EditResponseMessage = "";
+    }
+}
+
+<style>
+    body {
+        font-family: 'Arial', sans-serif;
+        margin: 0;
+        background-color: #f4f4f4;
+        color: #333;
+    }
+
+    h1 {
+        font-size: 2.5em;
+        color: #2c3e50;
+        margin-bottom: 10px;
+        text-align: center;
+    }
+
+    p {
+        font-size: 1em;
+        margin: 5px 0;
+    }
+
+    input[type="text"] {
+        width: 100%;
+        max-width: 300px;
+        padding: 10px;
+        margin: 5px 0 15px;
+        font-size: 1em;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+    }
+
+    button {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        font-size: 1em;
+        cursor: pointer;
+        border-radius: 5px;
+        margin: 5px 5px 15px 0;
+        transition: background-color 0.3s;
+    }
+
+    button:hover {
+        background-color: #2980b9;
+    }
+
+    button:last-child {
+        background-color: #2ecc71;
+    }
+
+    button:last-child:hover {
+        background-color: #27ae60;
+    }
+
+    .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #fff;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        text-align: center;
+    }
+
+    .card-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+        gap: 1rem;
+        margin: 0 auto;
+        max-width: 100%;
+        padding: 1rem;
+    }
+
+    .card {
+        background-color: #ffffff;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+        text-align: center;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .card-image {
+        width: 100%;
+        height: 12rem;
+        object-fit: cover;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .card-content {
+        padding: 1rem;
+    }
+
+    .card-name {
+        font-size: 1.25rem;
+        font-weight: bold;
+        margin: 0.5rem 0;
+        color: #333333;
+    }
+
+    .card-detail {
+        margin: 0.25rem 0;
+        font-size: 0.875rem;
+        color: #555555;
+    }
+
+    @@media screen and (max-width: 768px) {
+    .card-container {
+        padding: 0.5rem;
+    }
+
+    .card {
+        font-size: 0.9rem;
+    }
+    }
+
+    @@media screen and (max-width: 576px) {
+    .card-container {
+        grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+    }
+    }
+
+    .addModalTitle {
+        color: white;
+        font-weight: bold;
+    }
+
+    .loader-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 15vh;
+        margin: 0;
+    }
+
+    .loader {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: inline-block;
+        border-top: 3px solid #3498db;
+        border-right: 3px solid transparent;
+        box-sizing: border-box;
+        animation: rotation 1s linear infinite;
+    }
+
+    @@keyframes rotation {
+        0% {
+            transform: rotate(0deg);
+        }
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+</style>
+

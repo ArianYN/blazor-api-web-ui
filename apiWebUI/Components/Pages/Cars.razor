@@ -1,0 +1,380 @@
+﻿@page "/Cars"
+@rendermode InteractiveServer
+@using Newtonsoft.Json
+@using apiWebUI.APIHandlers
+@using apiWebUI.Classes
+
+<PageTitle>Car Database API</PageTitle>
+
+<div class="container">
+    <h1>CarDB</h1>
+    <p>Traverse this vast Database of Cars by using the tool below!</p>
+
+    <input type="text" @bind="ManufInput" placeholder="Enter Manufacturer">
+    <input type="text" @bind="ModelInput" placeholder="Enter Model">
+    <br/>
+    <button @onclick="SearchCarDB">Search</button>
+    <button @onclick="OpenAddModal">Add new Car</button>
+</div>
+
+@if (searchClicked)
+{
+    if (!SearchedCarsList.Any() && currentlySearching)
+    {
+        <div class="loader-container">
+            <span style="align-items: center" class="loader"></span>
+        </div>
+    }
+    else if (!SearchedCarsList.Any() && !currentlySearching)
+    {
+        <p style="text-align: center"> No cars found...</p>
+    }
+    else
+    {
+        <div class="card-container">
+            @foreach (Car currentCar in SearchedCarsList)
+            {
+                <div class="card-container">
+                    <div class="card">
+                        <img src="carPhotos/@currentCar.carImage" alt="User Image" class="card-image" />
+                        <div class="card-content">
+                            <h2 class="card-name">@currentCar.Manufacturer @currentCar.Model</h2>
+                            <p class="card-detail"><strong>Type:</strong> @currentCar.Type</p>
+                            <p class="card-detail"><strong>Fueltype:</strong> @currentCar.Fuel</p>
+                            <p class="card-detail"><strong>Owner:</strong> @currentCar.Owner.FirstName @currentCar.Owner.LastName</p>
+                        </div>
+                        <button style="width: 50%; margin: 0 auto; display: block; margin-bottom: 10px; background-color: red" @onclick="@(() => InitDeleteCarModal(currentCar))">Delete</button>
+
+                    </div>
+                </div>
+            }
+            @if (SearchedCarsList.Count % 30 == 0)
+            {
+                <button @onclick="ViewMore">View More</button>
+            }
+        </div>
+    }
+}
+
+@if (addModalOpen)
+{
+    <div class="modal" tabindex="-1" style="display:block;">
+        <div class="modal-dialog">
+            <div class="modal-content" style="background-color: #282829;">
+                <div class="modal-header">
+                    <h5 class="addModalTitle">Add new Person</h5>
+                    <button type="button" class="btn-close" @onclick="CloseAddModal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <input type="text" placeholder="Vin-Number" @bind="newCar.Vin"/>
+                    <input type="text" placeholder="Manufacturer" @bind="newCar.Manufacturer"/>
+                    <input type="text" placeholder="Model" @bind="newCar.Model"/>
+                    <input type="text" placeholder="Type (Hatchback, Sports etc.)" @bind="newCar.Type"/>
+                    <input type="text" placeholder="Fuel-type" @bind="newCar.Fuel"/>
+                    <input type="text" placeholder="Owner Id" @bind="newCar.OwnerId"/>
+                </div>
+
+                <div class="modal-footer">
+                    <p style="color: white">@AddResponseMessage</p>
+                    <button type="button" class="btn btn-secondary" style="background-color: green" @onclick="AddNewCar">Add</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (deleteModalOpen)
+{
+    <div class="modal" tabindex="-1" style="display:block;">
+        <div class="modal-dialog">
+            <div class="modal-content" style="background-color: #282829;">
+                <div class="modal-header">
+                    <h5 class="addModalTitle">Are you sure you want to delete this car? (@carToDelete.Manufacturer @carToDelete.Model)</h5>
+                </div>
+
+                <div class="modal-body">
+                    <button type="button" class="btn btn-secondary" style="background-color: red" @onclick="DeleteCar">Delete</button>
+                    <button type="button" class="btn btn-secondary" style="background-color: orange" @onclick="CloseDeleteModal">Cancel</button>
+                </div>
+
+                <div class="modal-footer">
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string ManufInput;
+    private string ModelInput;
+    private int PageAmount = 1;
+
+    private bool searchClicked = false;
+    private bool currentlySearching = false;
+    
+    List<Car> SearchedCarsList = new List<Car>();
+
+    private bool addModalOpen = false;
+    private bool deleteModalOpen = false;
+
+    Car newCar = new Car();
+    private string AddResponseMessage = "";
+
+    Car carToDelete = new Car();
+    
+    private async Task SearchCarDB()
+    {
+        searchClicked = false;
+        SearchedCarsList.Clear();
+        PageAmount = 1;
+        CarAPIService carApi = new CarAPIService();
+        
+        searchClicked = true;
+        
+        currentlySearching = true;
+        SearchedCarsList = await carApi.GetCarsAsync(ManufInput, ModelInput, PageAmount);
+        currentlySearching = false;
+    }
+
+    private async Task ViewMore()
+    {
+        PageAmount++;
+        CarAPIService carApi = new CarAPIService();
+    
+        currentlySearching = true;
+        List<Car> moreCars = await carApi.GetCarsAsync(ManufInput, ModelInput, PageAmount);
+    
+        foreach (Car car in moreCars)
+        {
+            SearchedCarsList.Add(car);
+        }
+    }
+
+    public async Task AddNewCar()
+    {
+        AddResponseMessage = "";
+        if (String.IsNullOrEmpty(newCar.Vin) ||
+            String.IsNullOrEmpty(newCar.Manufacturer) ||
+            String.IsNullOrEmpty(newCar.Model) ||
+            String.IsNullOrEmpty(newCar.Fuel) ||
+            String.IsNullOrEmpty(newCar.Type))
+        {
+            AddResponseMessage = "*All fields required*";
+            return;
+        }
+        
+        CarAPIService carApi= new CarAPIService();
+        string response = await carApi.AddCarAsync(newCar);
+        Car carAdded = JsonConvert.DeserializeObject<Car>(response);
+    
+        if (carAdded == null)
+        {
+            AddResponseMessage = "! Failed to create new Person...";
+            return;
+        }
+        else
+        {
+            AddResponseMessage = $"Added new car: {carAdded.Manufacturer} {carAdded.Owner}";
+            newCar = new Car();
+
+        }
+    }
+
+    private async Task DeleteCar()
+    {
+        CarAPIService carApiService = new CarAPIService();
+        string apiResponse = await carApiService.DeleteCarAsync(carToDelete);
+        await SearchCarDB();
+        carToDelete = new Car();
+        CloseDeleteModal();
+    }
+
+    private async Task InitDeleteCarModal(Car carToDeleteParam)
+    {
+        carToDelete = carToDeleteParam;
+        OpenDeleteModal();
+    }
+
+    private void OpenDeleteModal()
+    {
+        deleteModalOpen = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        deleteModalOpen = false;
+    }
+
+    private void OpenAddModal()
+    {
+        addModalOpen = true;
+    }
+
+    private void CloseAddModal()
+    {
+        addModalOpen = false;
+    }
+}
+
+<style>
+    body {
+        font-family: 'Arial', sans-serif;
+        margin: 0;
+        background-color: #f4f4f4;
+        color: #333;
+    }
+
+    h1 {
+        font-size: 2.5em;
+        color: #2c3e50;
+        margin-bottom: 10px;
+        text-align: center;
+    }
+
+    p {
+        font-size: 1em;
+        margin: 5px 0;
+    }
+
+    input[type="text"] {
+        width: 100%;
+        max-width: 300px;
+        padding: 10px;
+        margin: 5px 0 15px;
+        font-size: 1em;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+    }
+
+    button {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        font-size: 1em;
+        cursor: pointer;
+        border-radius: 5px;
+        margin: 5px 5px 15px 0;
+        transition: background-color 0.3s;
+    }
+
+    button:hover {
+        background-color: #2980b9;
+    }
+
+    button:last-child {
+        background-color: #2ecc71;
+    }
+
+    button:last-child:hover {
+        background-color: #27ae60;
+    }
+
+    .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #fff;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        text-align: center;
+    }
+
+    .card-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+        gap: 1rem;
+        margin: 0 auto;
+        max-width: 100%;
+        padding: 1rem;
+    }
+
+    .card {
+        background-color: #ffffff;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+        text-align: center;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .card-image {
+        width: 100%;
+        height: 12rem;
+        object-fit: cover;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .card-content {
+        padding: 1rem;
+    }
+
+    .card-name {
+        font-size: 1.25rem;
+        font-weight: bold;
+        margin: 0.5rem 0;
+        color: #333333;
+    }
+
+    .card-detail {
+        margin: 0.25rem 0;
+        font-size: 0.875rem;
+        color: #555555;
+    }
+
+    @@media screen and (max-width: 768px) {
+    .card-container {
+        padding: 0.5rem;
+    }
+
+    .card {
+        font-size: 0.9rem;
+    }
+    }
+
+    @@media screen and (max-width: 576px) {
+    .card-container {
+        grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+    }
+    }
+
+    .addModalTitle {
+        color: white;
+        font-weight: bold;
+    }
+
+    .loader-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 15vh;
+        margin: 0;
+    }
+
+    .loader {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: inline-block;
+        border-top: 3px solid #3498db;
+        border-right: 3px solid transparent;
+        box-sizing: border-box;
+        animation: rotation 1s linear infinite;
+    }
+
+    @@keyframes rotation {
+        0% {
+            transform: rotate(0deg);
+        }
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+</style>
